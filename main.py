@@ -12,13 +12,14 @@ def main(m=2):
     root = Node()
 
     # Initial pass to build Itemsets of size 1
-    for d in data1:
+    for i, d in enumerate(data1):
         root.add_child((d,))
 
-    # Pass over the dataset in m-sized chunks.
-    for i, end in enumerate(range(m, len(data)+m, m)):
-        for d in data[i*m:end].iterrows():
-            root.increment(d[1])
+    while root.dashed_children_exist():
+        # Pass over the dataset in m-sized chunks.
+        for i, end in enumerate(range(m, len(data)+m, m)):
+            for j, d in enumerate(data[i*m:end].iterrows()):
+                root.increment(m*i+j, d[1])
 
     root.to_string(None)
 
