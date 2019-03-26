@@ -4,7 +4,7 @@ from StateEnum import State
 class Node:
 
     def __init__(self, root=None, items=(), min_sup=0.2):
-        self.root = root
+        self.root: Node = root
         self.item = {items} if type(items) == str else set(tuple(items))
         self.children = dict()
         self.counter = 0
@@ -26,8 +26,8 @@ class Node:
     def get_root(self):
         return self.root
 
-    def add_child(self, key, itemset):
-        self.children[key] = Node(self, itemset)
+    def add_child(self, key):
+        self.children[key] = Node(self, self.get_item().union(key))
 
     def get_children(self):
         return self.children
@@ -35,11 +35,11 @@ class Node:
     def get_child(self, target_key):
         return self.children.get(target_key, False)
 
-    def get_item(self):
+    def get_item(self) -> set:
         return self.item
 
     def increment(self, S=()):
-        tuple(S)
+        S = tuple(S)
 
         self.counter += 1
         if self.counter > self.min_sup:
@@ -50,18 +50,22 @@ class Node:
             if self.children.get(Si, False):
                 self.children[Si].increment(S[i+1:])
             else:
-                self.add_child(Si, S)
+                self.add_child(Si)
                 self.children[Si].increment(S[i+1:])
+
+    def get_depth(self):
+        return self.depth
 
     def count_parents(self):
         if self.root is None:
             return 0
-        return 1 + self.root.count_parents()
+        return 1 + self.root.get_depth()
 
     def to_string(self, name, base="",):
         print(
             base if base == "" else base[:-2] + '+--',
-            name[0] if len(self.item) > 0 else "Root"
+            name[0] if len(self.item) > 0 else "Root",
+            ": ", self.item
         )
         for child in self.children:
             self.children[child].to_string(child, base + " |\t")

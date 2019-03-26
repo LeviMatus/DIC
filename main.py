@@ -14,12 +14,13 @@ def main():
     root = Node()
 
     for d in data1:
-        root.add_child((d,), d)
+        root.add_child((d,))
 
     for d in data2:
         root.increment(d)
 
     root.to_string(None)
+
 
 if __name__ == '__main__':
     main()
