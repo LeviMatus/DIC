@@ -41,6 +41,9 @@ class Node:
     def increment(self, S=()):
         S = tuple(S)
 
+        if self.state != State.DASHED_BOX and self.state != State.DASHED_CIRCLE:
+            return
+
         self.counter += 1
         if self.counter > self.min_sup:
             self.state = State.DASHED_BOX
