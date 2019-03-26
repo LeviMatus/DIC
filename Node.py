@@ -3,7 +3,7 @@ from StateEnum import State
 
 class Node:
 
-    def __init__(self, root=None, items=(), min_sup=0.2):
+    def __init__(self, root=None, items=(), min_sup=0.4):
         self.root: Node = root
         self.item = {items} if type(items) == str else set(tuple(items))
         self.children = dict()
