@@ -5,7 +5,11 @@ from typing import Dict
 
 class Node:
 
-    def __init__(self, root=None, items=(), tid=-1, min_sup=0.4):
+    total_records = None
+    min_sup = 0.3
+    min_conf = 0.4
+
+    def __init__(self, root=None, items=(), tid=-1):
         self.root: Node = root
         self.item = items if root else items
         self.children: Dict[tuple, Node] = dict()
@@ -13,7 +17,11 @@ class Node:
         self.marker = tid
         self.depth = self.count_parents()
         self.state = self.mark_node()
-        self.min_sup = min_sup
+        self.support = 0
+
+    @staticmethod
+    def calculate_support(count):
+        return count - 1 + (count - (count - 1)) / Node.total_records
 
     def mark_node(self):
         if self.root is None:
@@ -62,10 +70,10 @@ class Node:
             transition_child = True
             paths = []
 
-            for i in range(0, len(child)):
+            for i in range(1, len(child)):
                 if not transition_child:
                     break
-                paths += combinations(self.children[child].item)
+                paths += combinations(self.children[child].item, r=i)
                 root = self.get_root_node()
 
                 for path in paths:
@@ -91,7 +99,9 @@ class Node:
 
             self.counter += 1
 
-            if self.counter > self.min_sup and self.state == State.DASHED_CIRCLE:
+            self.support = Node.calculate_support(self.support+1)
+
+            if self.support > Node.min_sup and self.state == State.DASHED_CIRCLE:
                 self.state = State.DASHED_BOX
                 self.handle_supersets()
 
@@ -111,11 +121,32 @@ class Node:
             return 0
         return 1 + self.root.get_depth()
 
+    def generate_rules(self):
+        if self.root is None:
+            for child in self.children:
+                self.children[child].generate_rules()
+        else:
+            for child in self.children:
+                child_state = self.children[child].state
+                if child_state == State.SOLID_BOX:
+                    antecedent = {item for item in self.item}
+                    consequent = {item for item in self.children[child].item}.difference(antecedent)
+                    confidence = self.children[child].support/self.support
+                    if confidence > Node.min_conf:
+                        print("Rule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}\n\n".format(antecedent, consequent, self.children[child].support, confidence))
+                    self.children[child].generate_rules()
+
+
+
+
+
+
     def to_string(self, name, base="",):
         print(
             base if base == "" else base[:-2] + '+--',
             name[0] if len(self.item) > 0 else "Root",
-            ": ", self.item
+            ": ", self.item, self.support, self.state
         )
         for child in self.children:
             self.children[child].to_string(child, base + " |\t")
+
