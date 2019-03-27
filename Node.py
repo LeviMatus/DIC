@@ -6,6 +6,7 @@ from typing import Dict
 class Node:
 
     total_records = None
+    root = None
     min_sup = 0.3
     min_conf = 0.4
 
@@ -48,14 +49,11 @@ class Node:
     def get_item(self) -> tuple:
         return self.item
 
-    def get_root_node(self):
-        if self.root.root is None:
-            return self.root
-        return self.root.get_root_node()
-
     def find_node(self, S: tuple):
-        if len(S) > 0 and self.children.get(S[0], False):
-            return self.children[S[0]].find_node(S[1:])
+        if len(S) > 0 and self.children.get((S[0],), False):
+            return self.children[(S[0],)].find_node(S[1:])
+        elif len(S) == 0:
+            return self
         return None
 
     def dashed_children_exist(self):
@@ -74,10 +72,9 @@ class Node:
                 if not transition_child:
                     break
                 paths += combinations(self.children[child].item, r=i)
-                root = self.get_root_node()
 
                 for path in paths:
-                    node: Node = root.find_node(path)
+                    node: Node = Node.root.find_node(path)
                     if node.state != State.SOLID_BOX and node.state != State.DASHED_BOX:
                         transition_child = False
                         break
@@ -134,6 +131,15 @@ class Node:
                     confidence = self.children[child].support/self.support
                     if confidence > Node.min_conf:
                         print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}".format(antecedent, consequent, self.children[child].support, confidence))
+
+                    antecedent = consequent
+                    consequent = {item for item in self.item}.difference(antecedent)
+                    follows = Node.root.find_node(tuple(antecedent))
+                    confidence = self.children[child].support/follows.support
+                    if confidence > Node.min_conf:
+                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}".format(antecedent, consequent, self.children[child].support, confidence))
+
+
                     self.children[child].generate_rules()
 
     def to_string(self, name, base="",):
