@@ -1,6 +1,6 @@
 from StateEnum import State
 from itertools import combinations
-from typing import Dict
+from termcolor import colored
 
 
 class Node:
@@ -13,7 +13,7 @@ class Node:
     def __init__(self, root=None, items=(), tid=-1):
         self.root: Node = root
         self.item = items if root else items
-        self.children: Dict[tuple, Node] = dict()
+        self.children = dict()
         self.counter = 0
         self.marker = tid
         self.depth = self.count_parents()
@@ -139,14 +139,15 @@ class Node:
                     if confidence > Node.min_conf:
                         print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}".format(antecedent, consequent, self.children[child].support, confidence))
 
-
                     self.children[child].generate_rules()
 
     def to_string(self, name, base="",):
+        node_name = name[0] if len(self.item) > 0 else "Root"
         print(
-            base if base == "" else base[:-2] + '+--',
-            name[0] if len(self.item) > 0 else "Root",
-            ": ", "{:.2f}".format(self.support), self.state
+            base if base == "" else base[:-2] + '+-- {}: {} --- {}'
+                .format(node_name,
+                        colored('{:.2f}'.format(self.support), 'red'),
+                        colored('{}'.format(self.state), 'cyan'))
         )
         for child in self.children:
             self.children[child].to_string(child, base + " |\t")
