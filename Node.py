@@ -87,6 +87,8 @@ class Node:
 
         if self.state == State.DASHED_BOX or self.state == State.DASHED_CIRCLE:
 
+            # TODO: tid fails for records with duplicate items.
+            # Thinks that the tid has been reached again.
             if tid == self.marker:
                 self.state = State.SOLID_CIRCLE if self.state == State.DASHED_CIRCLE else State.SOLID_BOX
 
@@ -144,10 +146,10 @@ class Node:
     def to_string(self, name, base="",):
         node_name = name[0] if len(self.item) > 0 else "Root"
         print(
-            base if base == "" else base[:-2] + '+-- {}: {} --- {}'
+            base if base == "" else base[:-2] + '+-- {}: {} --- {} {}'
                 .format(node_name,
                         colored('{:.2f}'.format(self.support), 'red'),
-                        colored('{}'.format(self.state), 'cyan'))
+                        colored('{}'.format(self.state), 'cyan'), self.item)
         )
         for child in self.children:
             self.children[child].to_string(child, base + " |\t")
