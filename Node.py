@@ -92,18 +92,18 @@ class Node:
 
             if tid == self.marker:
                 self.state = State.SOLID_CIRCLE if self.state == State.DASHED_CIRCLE else State.SOLID_BOX
-                return
 
-            if self.counter == 0:
-                self.marker = tid
+            else:
+                if self.counter == 0:
+                    self.marker = tid
 
-            self.counter += 1
+                self.counter += 1
 
-            self.support = Node.calculate_support(self.support+1)
+                self.support = Node.calculate_support(self.support+1)
 
-            if self.support > Node.min_sup and self.state == State.DASHED_CIRCLE:
-                self.state = State.DASHED_BOX
-                self.handle_supersets()
+                if self.support > Node.min_sup and self.state == State.DASHED_CIRCLE:
+                    self.state = State.DASHED_BOX
+                    self.handle_supersets()
 
         for i, Si in enumerate(S):
             Si = (Si,)
@@ -133,19 +133,14 @@ class Node:
                     consequent = {item for item in self.children[child].item}.difference(antecedent)
                     confidence = self.children[child].support/self.support
                     if confidence > Node.min_conf:
-                        print("Rule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}\n\n".format(antecedent, consequent, self.children[child].support, confidence))
+                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}".format(antecedent, consequent, self.children[child].support, confidence))
                     self.children[child].generate_rules()
-
-
-
-
-
 
     def to_string(self, name, base="",):
         print(
             base if base == "" else base[:-2] + '+--',
             name[0] if len(self.item) > 0 else "Root",
-            ": ", self.item, self.support, self.state
+            ": ", "{:.2f}".format(self.support), self.state
         )
         for child in self.children:
             self.children[child].to_string(child, base + " |\t")
