@@ -12,7 +12,7 @@ min_sup = -1.0
 min_conf = -1.0
 
 # Anonymous functions that can be used for any support calculation (or average function).
-generic_support_calculator = lambda total: lambda count: count-1 + (count-(count-1))/total
+generic_support_calculator = lambda total: lambda count: count - 1 + (count - (count - 1)) / total
 support_calculator = None
 
 
@@ -35,7 +35,7 @@ def main():
         for transaction in D.values:
             for candidate in candidates[k].keys():
                 if candidate.issubset(transaction):
-                    candidates[k][candidate] = support_calculator(candidates[k][candidate]+1)
+                    candidates[k][candidate] = support_calculator(candidates[k][candidate] + 1)
 
         # Declare Lk to be an empty set
         L = set()
@@ -129,7 +129,7 @@ def report(frequent_sets):
     """
     For each frequent itemset, split it into heads and tails. Then for each head and tail, calculate the 
     support of ht with a final pass through D. If h and t are a subset of a row, then the support can increase.
-    
+
     For each h and t, calculate the confidence. If the confidence is sufficiently high, output the rules.
     """
     for freq in frequent_sets:
@@ -141,16 +141,17 @@ def report(frequent_sets):
 
             for row in D.values:
                 if h.issubset(row) and t.issubset(row):
-                    support_ht = support_calculator(support_ht+1)
+                    support_ht = support_calculator(support_ht + 1)
 
             support_a = candidates[len(h)][h]
-            confidence = support_ht/support_a
+            support_b = candidates[len(t)][t]
+            confidence = support_ht / support_a
             if confidence > min_conf:
                 h = {format_item(item) for item in h}
                 t = {format_item(item) for item in t}
                 with open('Rules.txt', 'a') as file:
-                    file.write("Rule#{}: {} => {}\n(Support={:.2f}, Confidence={:.2f})\n\n"
-                               .format(count, h, t, support_ht, confidence))
+                    file.write("Rule#{}: {} => {}\n(Support={:.2f}, Confidence={:.2f}, Support_A={:.2f}, Support_B={:.2f})\n\n"
+                               .format(count, h, t, support_ht, confidence, support_a, support_b))
 
                 count += 1
 
