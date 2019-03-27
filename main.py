@@ -12,6 +12,7 @@ def main(m=2):
     root = Node()
 
     Node.total_records = len(data.values)
+    Node.root = root
 
     # Initial pass to build Itemsets of size 1
     for i, d in enumerate(data1):
@@ -24,7 +25,6 @@ def main(m=2):
                 root.increment(m*i+j, d[1])
 
     root.to_string(None)
-
 
     root.generate_rules()
 
