@@ -1,7 +1,7 @@
 from StateEnum import State
 from itertools import combinations
 from termcolor import colored
-
+from collections import Counter
 
 class Node:
 
@@ -10,12 +10,13 @@ class Node:
     min_sup = 0.3
     min_conf = 0.4
 
-    def __init__(self, root=None, items=(), tid=-1):
+    def __init__(self, root=None, items=(), tid=-1, scan_id=-1):
         self.root: Node = root
         self.item = items if root else items
         self.children = dict()
         self.counter = 0
         self.marker = tid
+        self.scan_id = -1
         self.depth = self.count_parents()
         self.state = self.mark_node()
         self.support = 0
@@ -82,19 +83,20 @@ class Node:
             if transition_child:
                 self.children[child].state = State.DASHED_CIRCLE
 
-    def increment(self, tid, S=()):
+    def increment(self, tid, scan_id, S=()):
         S = tuple(S)
 
         if self.state == State.DASHED_BOX or self.state == State.DASHED_CIRCLE:
 
             # TODO: tid fails for records with duplicate items.
             # Thinks that the tid has been reached again.
-            if tid == self.marker:
+            if tid == self.marker and scan_id != self.scan_id:
                 self.state = State.SOLID_CIRCLE if self.state == State.DASHED_CIRCLE else State.SOLID_BOX
 
             else:
                 if self.counter == 0:
                     self.marker = tid
+                    self.scan_id = scan_id
 
                 self.counter += 1
 
@@ -107,10 +109,10 @@ class Node:
         for i, Si in enumerate(S):
             Si = (Si,)
             if self.children.get(Si, False):
-                self.children[Si].increment(tid, S[i+1:])
+                self.children[Si].increment(tid, scan_id, S[i+1:])
             else:
                 self.add_child(Si)
-                self.children[Si].increment(tid, S[i+1:])
+                self.children[Si].increment(tid, scan_id, S[i+1:])
 
     def get_depth(self):
         return self.depth
@@ -128,14 +130,29 @@ class Node:
             for child in self.children:
                 child_state = self.children[child].state
                 if child_state == State.SOLID_BOX:
-                    antecedent = {item for item in self.item}
-                    consequent = {item for item in self.children[child].item}.difference(antecedent)
+
+                    antecedent_count = Counter(self.item)
+                    consequent_count = Counter(self.children[child].item)
+
+                    ante_once = list([e for e, v in antecedent_count.items() if v == 1])
+                    conce_once = list([e for e, v in consequent_count.items() if v == 1])
+                    ante_mult = {e: v for e, v in antecedent_count.items() if v > 1}
+                    conce_mult = {e: v for e, v in consequent_count.items() if v > 1}
+
+                    consequent = set(conce_once).difference(ante_once)
+
+                    for e, v in conce_mult.items():
+                        if ante_mult.get(e, -1) != v:
+                            consequent.add(e)
+
                     confidence = self.children[child].support/self.support
                     if confidence > Node.min_conf:
-                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}".format(antecedent, consequent, self.children[child].support, confidence))
+                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}".format(self.item, consequent, self.children[child].support, confidence))
 
                     antecedent = consequent
-                    consequent = {item for item in self.item}.difference(antecedent)
+                    consequent = {item for item in self.item}
+
+
                     follows = Node.root.find_node(tuple(antecedent))
                     confidence = self.children[child].support/follows.support
                     if confidence > Node.min_conf:
@@ -153,4 +170,3 @@ class Node:
         )
         for child in self.children:
             self.children[child].to_string(child, base + " |\t")
-

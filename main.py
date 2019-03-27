@@ -18,11 +18,13 @@ def main(m=2):
     for i, d in enumerate(data1):
         root.add_child((d,))
 
+    scan_num = 0
     while root.dashed_children_exist():
         # Pass over the dataset in m-sized chunks.
         for i, end in enumerate(range(m, len(data)+m, m)):
             for j, d in enumerate(data[i*m:end].iterrows()):
-                root.increment(m*i+j, d[1])
+                root.increment(m*i+j, scan_num, d[1])
+        scan_num += 1
 
     root.to_string(None)
 
