@@ -188,7 +188,12 @@ class Node:
                     self.handle_supersets()
 
         # For every item in the observation, traverse the Node's children and increment and add as needed.
+        # If an item has been encountered before, do not double count it. Skip to the next iteration.
+        encountered = set()
         for i, Si in enumerate(S):
+            if Si in encountered:
+                continue
+            encountered.add(Si)
             Si = (Si,)
             if self.children.get(Si, False):
                 self.children[Si].increment(tid, scan_id, S[i+1:])
