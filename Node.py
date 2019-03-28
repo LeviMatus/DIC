@@ -88,8 +88,6 @@ class Node:
 
         if self.state == State.DASHED_BOX or self.state == State.DASHED_CIRCLE:
 
-            # TODO: tid fails for records with duplicate items.
-            # Thinks that the tid has been reached again.
             if tid == self.marker and scan_id != self.scan_id:
                 self.state = State.SOLID_CIRCLE if self.state == State.DASHED_CIRCLE else State.SOLID_BOX
 
