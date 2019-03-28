@@ -16,7 +16,7 @@ class Node:
         self.children = dict()
         self.counter = 0
         self.marker = tid
-        self.scan_id = -1
+        self.scan_id = scan_id
         self.depth = self.count_parents()
         self.state = self.mark_node()
         self.support = 0
