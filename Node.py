@@ -120,6 +120,23 @@ class Node:
             return 0
         return 1 + self.root.get_depth()
 
+    def generate_consequent(self, child):
+        antecedent_count = Counter(self.item)
+        consequent_count = Counter(self.children[child].item)
+
+        non_repeating_antecedents = list([e for e, v in antecedent_count.items() if v == 1])
+        non_repeating_consequents = list([e for e, v in consequent_count.items() if v == 1])
+        repeating_antecedents = {e: v for e, v in antecedent_count.items() if v > 1}
+        repeating_consequents = {e: v for e, v in consequent_count.items() if v > 1}
+
+        consequent = set(non_repeating_consequents).difference(non_repeating_antecedents)
+
+        for item, count in repeating_consequents.items():
+            if repeating_antecedents.get(item, -1) != count:
+                consequent.add(item)
+
+        return consequent
+
     def generate_rules(self):
         if self.root is None:
             for child in self.children:
@@ -129,32 +146,22 @@ class Node:
                 child_state = self.children[child].state
                 if child_state == State.SOLID_BOX:
 
-                    antecedent_count = Counter(self.item)
-                    consequent_count = Counter(self.children[child].item)
-
-                    ante_once = list([e for e, v in antecedent_count.items() if v == 1])
-                    conce_once = list([e for e, v in consequent_count.items() if v == 1])
-                    ante_mult = {e: v for e, v in antecedent_count.items() if v > 1}
-                    conce_mult = {e: v for e, v in consequent_count.items() if v > 1}
-
-                    consequent = set(conce_once).difference(ante_once)
-
-                    for e, v in conce_mult.items():
-                        if ante_mult.get(e, -1) != v:
-                            consequent.add(e)
-
+                    consequent = self.generate_consequent(child)
                     confidence = self.children[child].support/self.support
+
                     if confidence > Node.min_conf:
-                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}".format(self.item, consequent, self.children[child].support, confidence))
+                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}"
+                              .format(self.item, consequent, self.children[child].support, confidence))
 
                     antecedent = consequent
                     consequent = {item for item in self.item}
 
+                    consequent_node = Node.root.find_node(tuple(antecedent))
+                    confidence = self.children[child].support/consequent_node.support
 
-                    follows = Node.root.find_node(tuple(antecedent))
-                    confidence = self.children[child].support/follows.support
                     if confidence > Node.min_conf:
-                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}".format(antecedent, consequent, self.children[child].support, confidence))
+                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}"
+                              .format(antecedent, consequent, self.children[child].support, confidence))
 
                     self.children[child].generate_rules()
 
