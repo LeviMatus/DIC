@@ -1,7 +1,8 @@
+import itertools
+
 from StateEnum import State
 from itertools import combinations
 from termcolor import colored
-from collections import Counter
 
 
 class Node:
@@ -22,15 +23,16 @@ class Node:
 
     total_records = None
     root = None
-    min_sup = 0.3
-    min_conf = 0.4
+    min_sup = 0.02
+    min_conf = 0.5
+    rule_count = 0
+    rules = dict()
 
-    def __init__(self, root=None, items=(), tid=-1, scan_id=-1):
+    def __init__(self, root=None, items=(), tid=-1):
         self.root: Node = root
         self.item = items if root else items
         self.children = dict()
         self.marker = tid
-        self.scan_id = scan_id
         self.depth = self.__count_parents()
         self.state = self.mark_node()
         self.support = 0
@@ -54,6 +56,47 @@ class Node:
         curr_support += 1
 
         return curr_support - 1 + (curr_support - (curr_support - 1)) / Node.total_records
+
+    @staticmethod
+    def consequent_finder(*possible_paths):
+        """
+        Given a list of possible paths, find the first one which yields a valid Trie Node.
+
+        Parameters
+        ----------
+        possible_paths : A generator friendly record of possible paths from the root node to a node representing
+        a particular itemset.
+
+        Returns
+        -------
+        A node if successful. None otherwise.
+        """
+        for path in possible_paths[0]:
+            path = list(path)
+            node = Node.root.find_node(path)
+            if node is not None:
+                return node
+        return None
+
+    @staticmethod
+    def create_rule_set(lhs, rhs):
+        """
+        Given the LHS and RHS of an association rule, create the LHS and create a RHS in which
+        all elements of the LHS are absent.
+
+        Parameters
+        ----------
+        lhs : LHS is tuple which corresponds to the "(A B C) =>" portion of an association rule.
+
+        rhs : RHS is tuple which corresponds to the "=> (D E)" portion of an association rule.
+
+        Returns
+        -------
+        a tuple containing the lhs and rhs tuples in the form (lhs, rhs).
+        """
+        antecedent = tuple(lhs)
+        consequent = tuple(set(rhs).difference(antecedent))
+        return tuple([antecedent, consequent])
 
     def mark_node(self):
         """
@@ -146,7 +189,7 @@ class Node:
             if transition_child:
                 self.children[child].state = State.DASHED_CIRCLE
 
-    def increment(self, tid, scan_id, S=()):
+    def increment(self, tid, S=()):
         """
         For every element of S, traverse root over all combinations of remaining elements of S.
         Section 3 of DIC.
@@ -155,7 +198,7 @@ class Node:
         ----------
         tid : transaction-id of the row being observed.
             
-        scan_id : Dataset pass number.
+         : Dataset pass number.
             
         S : Tuple of values being observed.
              (Default value = ())
@@ -169,37 +212,39 @@ class Node:
             # If an entire scan over the dataset has completed we must stop counting.
             # For scenarios where the same item can appear in a single transaction, we avoid errant
             # state transitions to Solid by ensuring the tid is the same while scan ids are different.
-            if tid == self.marker and scan_id != self.scan_id:
+            if tid == self.marker:
                 self.state = State.SOLID_CIRCLE if self.state == State.DASHED_CIRCLE else State.SOLID_BOX
 
             # If the full scan for this itemset is not compelte, count this transaction.
             else:
-                # If this is the first increment for this node, initialize its marker and scan_id.
+                # If this is the first increment for this node, initialize its marker and .
                 if self.support == 0:
                     self.marker = tid
-                    self.scan_id = scan_id
 
                 self.support = Node.calculate_support(self.support)
 
                 # If the itemset is a candidate to be suspected of being large, transition and check its supersets
                 # for the possibility of being small.
-                if self.support > Node.min_sup and self.state == State.DASHED_CIRCLE:
+            if self.support > Node.min_sup:
+                if self.state == State.DASHED_CIRCLE:
                     self.state = State.DASHED_BOX
-                    self.handle_supersets()
+                self.handle_supersets()
 
         # For every item in the observation, traverse the Node's children and increment and add as needed.
         # If an item has been encountered before, do not double count it. Skip to the next iteration.
-        encountered = set()
+        # encountered = set()
         for i, Si in enumerate(S):
-            if Si in encountered:
+            if Si == '-1':
                 continue
-            encountered.add(Si)
+            # if Si in encountered:
+                # continue
+            # encountered.add(Si)
             Si = (Si,)
             if self.children.get(Si, False):
-                self.children[Si].increment(tid, scan_id, S[i+1:])
+                self.children[Si].increment(tid, S[i+1:])
             else:
                 self.add_child(Si)
-                self.children[Si].increment(tid, scan_id, S[i+1:])
+                self.children[Si].increment(tid, S[i+1:])
 
     def get_depth(self):
         """
@@ -219,36 +264,6 @@ class Node:
             return 0
         return 1 + self.root.get_depth()
 
-    def generate_consequent(self, child):
-        """
-        Given a child, generate the consequent itemsets from this Node's itemset as the antecedant.
-
-        Parameters
-        ----------
-        child : Node that is child of self for which to generate consequent itemset.
-            
-
-        Returns
-        -------
-        set of items of the child that do not overlap with this nodes itemset.
-        
-        """
-        antecedent_count = Counter(self.item)
-        consequent_count = Counter(self.children[child].item)
-
-        non_repeating_antecedents = list([e for e, v in antecedent_count.items() if v == 1])
-        non_repeating_consequents = list([e for e, v in consequent_count.items() if v == 1])
-        repeating_antecedents = {e: v for e, v in antecedent_count.items() if v > 1}
-        repeating_consequents = {e: v for e, v in consequent_count.items() if v > 1}
-
-        consequent = set(non_repeating_consequents).difference(non_repeating_antecedents)
-
-        for item, count in repeating_consequents.items():
-            if repeating_antecedents.get(item, -1) != count:
-                consequent.add(item)
-
-        return consequent
-
     def generate_rules(self):
         """
         For nodes with itemsets larger than 1, get the children of each node.
@@ -256,36 +271,45 @@ class Node:
 
         Continue through all nodes that are confirmed as large.
         """
-        if self.root is None:
+        if not self.root or len(self.children) > 0:
             for child in self.children:
                 self.children[child].generate_rules()
-        else:
-            for child in self.children:
-                child_state = self.children[child].state
-                if child_state == State.SOLID_BOX:
 
-                    # Generate consequent from child's itemset. Antecedent is this items itemset.
-                    consequent = self.generate_consequent(child)
-                    confidence = self.children[child].support/self.support
+        elif self.support > 0 and len(self.item) > 1:
+            enumerated_rules = []       # All possible rules derivable from the maximal itemset. May contain duplicates.
+            rules = set()               # Set of rules derived. Eliminates duplicates by nature of set structure.
 
-                    if confidence > Node.min_conf:
-                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}"
-                              .format(self.item, consequent, self.children[child].support, confidence))
+            # Add all possible combinations to the list of possible rules.
+            for i in range(1, len(self.item)):
+                [enumerated_rules.append(subset) for subset in combinations(self.item, r=i)]
 
-                    # For the bi-directional rule, the antecedent is the previous consequent. The new
-                    # consequent is this node's itemset. To find the appropriate support, Prefix search from root
-                    # for the node represented by the antecedent.
-                    antecedent = consequent
-                    consequent = {item for item in self.item}
+            # Maintain a possible Left Hand Side and Right Hand Side of a association rule by iterating twice
+            # Over rules. For each non-equal LHS and RHS, create a rule and add it to the rules set.
+            [rules.add(Node.create_rule_set(lhs, rhs)) for lhs in enumerated_rules for rhs in enumerated_rules if lhs != rhs]
 
-                    consequent_node = Node.root.find_node(tuple(antecedent))
-                    confidence = self.children[child].support/consequent_node.support
+            # Filter rules with () in the RHS or LHS.
+            rules = filter(lambda rule: rule[0] and rule[1], rules)
 
-                    if confidence > Node.min_conf:
-                        print("\n\nRule: {} ==> {}\nSupport={:.2f}, Confidence={:.2f}"
-                              .format(antecedent, consequent, self.children[child].support, confidence))
+            for antecedent, consequent in rules:
+                antecedent = sorted(antecedent)
+                consequent = sorted(consequent)
 
-                    self.children[child].generate_rules()
+                antecedent_node = Node.root.find_node(antecedent)
+
+                # RHS might be along another path. Permutation generator will efficiently provide each possible path
+                # permutation as it is needed as opposed to forcing the entire evaluation of all permutations.
+                consequent_paths = itertools.permutations(antecedent+consequent)
+
+                consequent_node = Node.consequent_finder(consequent_paths)
+                if antecedent_node.support > 0:
+                    confidence = consequent_node.support/antecedent_node.support
+
+                    if confidence > Node.min_conf and consequent_node.support > Node.min_sup:
+                        Node.rules[tuple([tuple(antecedent), tuple(consequent)])] = {
+                            'support': consequent_node.support,
+                            'confidence': confidence
+                        }
+                        Node.rule_count += 1
 
     def to_string(self, name, base="",):
         """
