@@ -28,6 +28,9 @@ class Node:
     rule_count = 0
     rules = dict()
 
+    to_transition = set()
+    to_finalize = set()
+
     def __init__(self, root=None, items=(), tid=-1):
         self.root: Node = root
         self.item = items if root else items
@@ -36,6 +39,8 @@ class Node:
         self.depth = self.__count_parents()
         self.state = self.mark_node()
         self.support = 0
+        self.pending = False
+        self.indices = []
 
     @staticmethod
     def calculate_support(curr_support):
@@ -46,12 +51,12 @@ class Node:
         ----------
         curr_support : The support currently observed by the calling node. One is added to this in order to calculate
         a running aggregate average of support.
-            
+
 
         Returns
         -------
         The new observed support. The ratio of observed instances of an itemset to the number of records in the dataset.
-        
+
         """
         curr_support += 1
 
@@ -117,7 +122,7 @@ class Node:
         ----------
         key: A tuple to serve as the child key. Key should be of length 1 and represent the element-wise difference
         between this node's itemset and the child's itemset.
-            
+
         tid : The transation-id or index at which the child will initially be counted at. Once a full pass over the
         dataset has completed, when we observed this tid at the child again, we will close off the node for counting.
              (Default value = -1)
@@ -125,7 +130,7 @@ class Node:
         Returns
         -------
         This function has no return value.
-        
+
         """
         self.children[key] = Node(self, self.item+key, tid)
 
@@ -136,12 +141,12 @@ class Node:
         Parameters
         ----------
         S: tuple of items to sequentially search the root node by.
-            
+
 
         Returns
         -------
         Node which represents itemset S if it exists, else None.
-        
+
         """
         if len(S) > 0 and self.children.get((S[0],), False):
             return self.children[(S[0],)].find_node(S[1:])
@@ -157,10 +162,12 @@ class Node:
         -------
         True if such a node exists, else False
         """
-        for child in self.children:
-            if self.children[child].state == State.DASHED_CIRCLE or self.children[child].state == State.DASHED_BOX:
+        for child in self.children.values():
+            if child.state == State.DASHED_CIRCLE or child.state == State.DASHED_BOX:
                 return True
-            return self.children[child].dashed_children_exist()
+            if len(child.children) == 0 or not child.dashed_children_exist():
+                continue
+            return True
         return False
 
     def handle_supersets(self):
@@ -197,9 +204,9 @@ class Node:
         Parameters
         ----------
         tid : transaction-id of the row being observed.
-            
+
          : Dataset pass number.
-            
+
         S : Tuple of values being observed.
              (Default value = ())
 
@@ -212,8 +219,13 @@ class Node:
             # If an entire scan over the dataset has completed we must stop counting.
             # For scenarios where the same item can appear in a single transaction, we avoid errant
             # state transitions to Solid by ensuring the tid is the same while scan ids are different.
-            if tid == self.marker:
-                self.state = State.SOLID_CIRCLE if self.state == State.DASHED_CIRCLE else State.SOLID_BOX
+            if tid in self.indices:
+
+                def finalize_state(node):
+                    def execute():
+                        node.state = State.SOLID_CIRCLE if self.state == State.DASHED_CIRCLE else State.SOLID_BOX
+                    return execute
+                Node.to_finalize.add(finalize_state(self))
 
             # If the full scan for this itemset is not compelte, count this transaction.
             else:
@@ -221,14 +233,19 @@ class Node:
                 if self.support == 0:
                     self.marker = tid
 
+                self.indices.append(tid)
                 self.support = Node.calculate_support(self.support)
 
                 # If the itemset is a candidate to be suspected of being large, transition and check its supersets
                 # for the possibility of being small.
             if self.support > Node.min_sup:
-                if self.state == State.DASHED_CIRCLE:
-                    self.state = State.DASHED_BOX
-                self.handle_supersets()
+                def transition_state(node):
+                    def execute():
+                        if node.state == State.DASHED_CIRCLE:
+                            node.state = State.DASHED_BOX
+                        node.handle_supersets()
+                    return execute
+                Node.to_transition.add(transition_state(self))
 
         # For every item in the observation, traverse the Node's children and increment and add as needed.
         # If an item has been encountered before, do not double count it. Skip to the next iteration.

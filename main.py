@@ -9,7 +9,7 @@ import time
 
 def timeit(method):
     def timed(*args, **kw):
-        results = {"time": [], "m": [], "min_sup": [], "min_conf": []}
+        results = {"m": [], "min_sup": [], "min_conf": [], "time": []}
         grid = kw.get('grid', False)
         if kw.get('grid', False):
             for m in grid['m']:
@@ -19,12 +19,14 @@ def timeit(method):
 
                         Node.total_records = len(args[0].values)
                         Node.root = root
+                        Node.min_conf = min_conf
+                        Node.min_sup = min_sup
 
                         ts = time.time()
                         result = method(*args, root=root, **kw)
                         te = time.time()
 
-                        kw['log_time']['time'].append(int((te-ts))*1000)
+                        kw['log_time']['time'].append(int((te-ts)*1000))
                         kw['log_time']['m'].append(m)
                         kw['log_time']["min_sup"].append(min_sup)
                         kw['log_time']["min_conf"].append(min_conf)
@@ -38,11 +40,11 @@ def timeit(method):
 
 
 @timeit
-def DIC(data, root, m=2, min_sup=0.02, min_conf=0.2, **kwargs):
+def DIC(data, root, m=2, **kwargs):
     # Initial pass to build Itemsets of size 1
     x = [val for d in data for val in data[d].unique()]
     for i, d in enumerate([val for d in data for val in data[d].unique()]):
-        root.add_child((d,))
+        root.add_child((d,), tid=0)
 
     scan_num = 0
     while root.dashed_children_exist():
@@ -50,32 +52,43 @@ def DIC(data, root, m=2, min_sup=0.02, min_conf=0.2, **kwargs):
         for i, end in enumerate(range(m, len(data) + m, m)):
             for j, d in enumerate(data[i * m:end].iterrows()):
                 root.increment(m * i + j, sorted(d[1]))
+        for executable in Node.to_transition:
+            executable()
+        for executable in Node.to_finalize:
+            executable()
+        Node.to_transition = set()
+        Node.to_finalize = set()
         scan_num += 1
     print("Scanned D {} times".format(scan_num))
     root.generate_rules()
+    print(len(Node.rules), "Rules found.")
+    for i, key in enumerate(Node.rules):
+        rule = Node.rules[key]
+        h = [format_item(item, data) for item in sorted(list(key[0]))]
+        t = [format_item(item, data) for item in sorted(list(key[1]))]
+        with open('Rules.txt', 'a') as file:
+            file.write("{} => {} (Support={:.2f}, Confidence={:.2f})\n"
+                       .format(h, t, rule['support'], rule['confidence']))
     return root
 
 
 def main():
 
-    data = pd.read_csv("league_cleaned2.csv")
+    data = pd.read_csv("Play_Tennis_Data_Set.csv")
+    # data = data.drop(columns=['caseid'])
+    data['Windy'] = data['Windy'].map({True: 'True', False: 'False'})
 
     time_data = {"time": [], "m": [], "min_sup": [], "min_conf": []}
 
     grid = {
-        "m": [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 5000, 10000],
-        "min_sup": [0.01, 0.02, 0.03, 0.05, 0.10, 0.2, 0.3, 0.4, 0.5, 0.6],
-        "min_conf": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    }
-
-    grid = {
-        "m": [500],
-        "min_sup": [0.02],
+        "m": [2],
+        "min_sup": [.05],
         "min_conf": [0.2]
     }
 
     root = DIC(data, grid=grid, log_time=time_data)
-    print(time_data)
+    results = pd.DataFrame.from_dict(time_data)
+    results.to_csv("DIC_Results.csv", index=False)
     # print(time_data)
     #
     # # root.to_string(None)
