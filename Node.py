@@ -23,8 +23,8 @@ class Node:
 
     total_records = None
     root = None
-    min_sup = 0.02
-    min_conf = 0.5
+    min_sup = None
+    min_conf = None
     rule_count = 0
     rules = dict()
 
@@ -33,7 +33,7 @@ class Node:
 
     def __init__(self, root=None, items=(), tid=-1):
         self.root: Node = root
-        self.item = items if root else items
+        self.items = items if root else items
         self.children = dict()
         self.marker = tid
         self.depth = self.__count_parents()
@@ -41,6 +41,8 @@ class Node:
         self.support = 0
         self.pending = False
         self.indices = []
+        self.is_finalized = False
+        self.has_transitioned = False
 
     @staticmethod
     def calculate_support(curr_support):
@@ -132,7 +134,7 @@ class Node:
         This function has no return value.
 
         """
-        self.children[key] = Node(self, self.item+key, tid)
+        self.children[key] = Node(self, self.items + key, tid)
 
     def find_node(self, S):
         """
@@ -224,44 +226,48 @@ class Node:
                 def finalize_state(node):
                     def execute():
                         node.state = State.SOLID_CIRCLE if self.state == State.DASHED_CIRCLE else State.SOLID_BOX
+                        node.is_finalized = False
                     return execute
-                Node.to_finalize.add(finalize_state(self))
+                if not self.is_finalized:
+                    self.is_finalized = True
+                    Node.to_finalize.add(finalize_state(self))
 
             # If the full scan for this itemset is not compelte, count this transaction.
             else:
-                # If this is the first increment for this node, initialize its marker and .
+                # If this is the first increment for this node, initialize its marker.
                 if self.support == 0:
                     self.marker = tid
 
                 self.indices.append(tid)
                 self.support = Node.calculate_support(self.support)
 
-                # If the itemset is a candidate to be suspected of being large, transition and check its supersets
-                # for the possibility of being small.
-            if self.support > Node.min_sup:
+            # If the itemset is a candidate to be suspected of being large, transition and check its supersets
+            # for the possibility of being small.
+            if self.support > Node.min_sup and self.state == State.DASHED_CIRCLE:
                 def transition_state(node):
                     def execute():
                         if node.state == State.DASHED_CIRCLE:
                             node.state = State.DASHED_BOX
-                        node.handle_supersets()
+                            node.handle_supersets()
+                        node.has_transitioned = False
                     return execute
-                Node.to_transition.add(transition_state(self))
+                if not self.has_transitioned:
+                    self.has_transitioned = True
+                    Node.to_transition.add(transition_state(self))
 
         # For every item in the observation, traverse the Node's children and increment and add as needed.
         # If an item has been encountered before, do not double count it. Skip to the next iteration.
-        # encountered = set()
-        for i, Si in enumerate(S):
-            if Si == '-1':
-                continue
-            # if Si in encountered:
-                # continue
-            # encountered.add(Si)
-            Si = (Si,)
-            if self.children.get(Si, False):
-                self.children[Si].increment(tid, S[i+1:])
-            else:
-                self.add_child(Si)
-                self.children[Si].increment(tid, S[i+1:])
+        if self.state != State.UNMARKED and self.state != State.SOLID_CIRCLE:
+            for i, Si in enumerate(S):
+                if Si == '-1':
+                    continue
+
+                Si = (Si,)
+                if self.children.get(Si, False):
+                    self.children[Si].increment(tid, S[i+1:])
+                else:
+                    self.add_child(Si)
+                    self.children[Si].increment(tid, S[i+1:])
 
     def get_depth(self):
         """
@@ -292,13 +298,13 @@ class Node:
             for child in self.children:
                 self.children[child].generate_rules()
 
-        elif self.support > 0 and len(self.item) > 1:
+        elif self.support > 0 and len(self.items) > 1:
             enumerated_rules = []       # All possible rules derivable from the maximal itemset. May contain duplicates.
             rules = set()               # Set of rules derived. Eliminates duplicates by nature of set structure.
 
             # Add all possible combinations to the list of possible rules.
-            for i in range(1, len(self.item)):
-                [enumerated_rules.append(subset) for subset in combinations(self.item, r=i)]
+            for i in range(1, len(self.items)):
+                [enumerated_rules.append(subset) for subset in combinations(self.items, r=i)]
 
             # Maintain a possible Left Hand Side and Right Hand Side of a association rule by iterating twice
             # Over rules. For each non-equal LHS and RHS, create a rule and add it to the rules set.
@@ -318,7 +324,7 @@ class Node:
                 consequent_paths = itertools.permutations(antecedent+consequent)
 
                 consequent_node = Node.consequent_finder(consequent_paths)
-                if antecedent_node.support > 0:
+                if antecedent_node and consequent_node and antecedent_node.support > 0:
                     confidence = consequent_node.support/antecedent_node.support
 
                     if confidence > Node.min_conf and consequent_node.support > Node.min_sup:
@@ -340,14 +346,14 @@ class Node:
              (Default value = "")
 
         """
-        node_name = name[0] if len(self.item) > 0 else "Root"
+        node_name = name[0] if len(self.items) > 0 else "Root"
         print(
             base if base == "" else base[:-2] + '+-- {}: {} --- {} {}'.format(node_name,
                                                                               colored('{:.2f}'.format(self.support)
                                                                                       , 'red'),
                                                                               colored('{}'.format(self.state)
                                                                                       , 'cyan'),
-                                                                              self.item)
+                                                                              self.items)
         )
         for child in self.children:
             self.children[child].to_string(child, base + " |\t")

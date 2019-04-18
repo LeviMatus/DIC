@@ -1,4 +1,5 @@
 #! /local/bin/python3
+import csv
 
 import pandas as pd
 import os
@@ -184,12 +185,13 @@ def report(frequent_sets):
             support_a = candidates[len(h)][h]
             confidence = support_ht/support_a
             if confidence > min_conf:
-                h = [format_item(item) for item in sorted(list(h))]
-                t = [format_item(item) for item in sorted(list(t))]
+                # Can be uncommented to output rules to file.
+                # h = [format_item(item) for item in sorted(list(h))]
+                # t = [format_item(item) for item in sorted(list(t))]
 
-                with open('a_Rules.txt', 'a') as file:
-                    file.write("{} => {} (Support={:.2f}, Confidence={:.2f})\n"
-                               .format(h, t, support_ht, confidence))
+                # with open('Apriori_Rules.txt', 'a') as file:
+                #     file.write("{} => {} (Support={:.2f}, Confidence={:.2f})\n"
+                #                .format(h, t, support_ht, confidence))
 
                 count += 1
     print(count)
@@ -203,33 +205,20 @@ def format_item(item):
 
 
 if __name__ == "__main__":
-    # D = pd.read_csv("league_cleaned2.csv")
-    D = pd.read_csv("Play_Tennis_Data_Set.csv")
-    # D = D.drop(columns=['caseid'])
-    D['Windy'] = D['Windy'].map({True: 'True', False: 'False'})
-
-    # while min_sup < 0.0 or min_sup > 1.0:
-    #     min_sup = float(input("Input the minimum support threshold: "))
-    #
-    # while min_conf < 0.0 or min_conf > 1.0:
-    #     min_conf = float(input("Input the minimum confidence threshold: "))
-
     try:
-        os.remove("a_Rules.txt")
+        os.remove("Apriori_Rules.txt")
     except OSError:
         pass
-    #
-    # with open('Rules.txt', 'a') as file:
-    #     file.write("1. User Input:\n\nSupport={}\nConfidence={}\n\n\n".format(min_sup, min_conf))
+
+    D = pd.read_csv("league_cleaned3.csv")
 
     time_data = {"time": [], "min_sup": [], "min_conf": []}
 
     grid = {
-        # "min_sup": [.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35],
-        "min_sup": [.05],
-        "min_conf": [0.2]
+        "min_sup": [0.005, 0.01, .02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.12],
+        "min_conf": [0.0]
     }
 
     main(log_time=time_data, grid=grid)
     results = pd.DataFrame.from_dict(time_data)
-    results.to_csv("Apriori_Tennis_Results.csv", index=False)
+    results.to_csv("Apriori_League3_Results.csv", index=False)
